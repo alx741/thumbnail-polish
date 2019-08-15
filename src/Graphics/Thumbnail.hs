@@ -1,40 +1,47 @@
 module Graphics.Thumbnail where
 
 import Control.Monad.Trans.Resource (MonadResource)
+import Data.Default                 (Default (..))
+import System.Directory             (getTemporaryDirectory)
 
 createThumbnails :: MonadResource m
  => Configuration -- ^ Use 'def' for default values
+ -> [Size]        -- ^ Thumbnail sizes to create
  -> FilePath      -- ^ Input image
  -> m (Either ThumbnailError [Thumbnail])
 createThumbnails = undefined
 
 data Configuration = Configuration
-    { maxFileSize      :: Integer -- ^ Maximum input file size in bytes. Default = 5MiB
-    , maxImageSize     :: Size -- ^ Maximum input image size. Default = 3000 x 3000 px
-    , cropFirst        :: Maybe Rect
+    { maxFileSize         :: Integer
+        -- ^ Maximum input file size in bytes. Default = 5MiB
+    , maxImageSize        :: Size
+        -- ^ Maximum input image size. Default = 4096 x 4096 px
+    , fileFormat          :: Maybe Encoding
+        -- ^ Whether to encode the thumbnail using the same file format of the
+        -- input image or a custom one. When a custom encoding is used the last
+        -- thumbnail in the list will be the reencoded input image.
+        -- Default: Nothing
+    , cropFirst           :: Maybe Rect
         -- ^ Whether the input image should be cropped to 'Rect' before creating
-        -- thumbnails or left intact. The first thumbnail will be the cropped
-        -- input image. Default: Nothing
+        -- thumbnails or left intact. The first thumbnail in the list will be
+        -- the cropped input image. Default: Nothing
     , preserveAspectRatio :: Bool
         -- ^ Whether the created thumbnails should adhere to only one dimension
         -- of the requested size in order to preserve the original image aspect
         -- ratio or distort the image to make it fit. Default: True
-    , upScaleOriginal :: Bool
+    , upScaleOriginal     :: Bool
         -- ^ Whether the original image should be up scaled to make it fit the
-        -- requested thumbnail sizes when the image is too small, otherwise
-        -- ignore the requested thumbnails that are bigger than the original
+        -- requested thumbnail sizes when the input image is too small,
+        -- otherwise ignore the requested thumbnails that are bigger than the
         -- input image. Default: False
-    , reencodeOriginal :: Maybe Reencoding
-        -- ^ Whether the input image should be reencoded or left intact.
-        -- Default: Nothing
-    , namePrefix :: String
+    , namePrefix          :: String
         -- ^ Created thumbnail files are named based on it's size, this option
-        -- adds a prefix (e.g. "<prefix>_512_512.jpg"). Default: ""
-    , nonceSuffix :: Bool
+        -- adds a prefix (e.g. "<prefix>512_512.jpg"). Default: "thumbnail-"
+    , nonceSuffix         :: Bool
         -- Whether to end thumbnail file names with a small nonce (i.e. a random
         -- string of characters). Useful for overwriting images that are prone
         -- to stay in cache. Default: False
-    , dstDirectory :: IO FilePath
+    , dstDirectory        :: IO FilePath
         -- ^ Where to put the created thumbnails.
         -- Default: 'getTemporaryDirectory'
     }
@@ -50,7 +57,7 @@ data Rect = Rect
     , rSize :: Size -- ^ Size of the rectangle
     } deriving (Show, Read, Eq, Ord)
 
-data Reencoding
+data Encoding
     = SameFileFormat -- ^ Reencode using the original file format
     | NewFileFormat ImageFileFormat -- ^ Reencode using the given file format
     deriving (Show, Read, Eq, Ord)
@@ -73,3 +80,16 @@ data Thumbnail = Thumbnail
     , thumbFormat      :: ImageFileFormat
     , thumbNonceSuffix :: Maybe String
     } deriving (Show, Eq)
+
+instance Default Configuration where
+    def = Configuration
+        { maxFileSize         = 5 * 1024 * 1024
+        , maxImageSize        = Size 4096 4096
+        , fileFormat          = Nothing
+        , cropFirst           = Nothing
+        , preserveAspectRatio = True
+        , upScaleOriginal     = False
+        , namePrefix          = "thumbnail-"
+        , nonceSuffix         = False
+        , dstDirectory        = getTemporaryDirectory
+        }
