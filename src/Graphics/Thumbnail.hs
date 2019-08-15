@@ -1,3 +1,13 @@
+-- | Create image thumbnails
+--
+-- Using the default configuration
+--
+-- >>> runResourceT $ createThumbnails def
+--      [Size 512 512, Size 128 128]
+--      "/opt/app/image.jpg"
+--
+-- Or specify a custom 'Configuration'
+
 module Graphics.Thumbnail where
 
 import Control.Monad.Trans.Resource (MonadResource)
