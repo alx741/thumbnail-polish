@@ -2,7 +2,7 @@
 --
 -- Using the default configuration
 --
--- >>> createThumbnails def [Size 512 512, Size 128 128] "/opt/app/image.jpg"
+-- >>> createThumbnails defaultConfig [Size 512 512, Size 128 128] "/opt/app/image.jpg"
 --
 -- Or specify a custom 'Configuration'
 
@@ -34,7 +34,7 @@ import qualified Vision.Primitive           as P (Rect (..), Size, ix2)
 import           Vision.Primitive.Shape     as PS
 
 createThumbnails
- :: Configuration -- ^ Use 'def' for default values
+ :: Configuration -- ^ Use 'defaultConfig' for default values
  -> [Size]        -- ^ Thumbnail sizes to create
  -> FilePath      -- ^ Input image
  -> IO [Thumbnail]
@@ -89,7 +89,7 @@ createThumbnail Configuration{..} suffix dstDir img imgSize size@(Size w h) = do
         pure $ Thumbnail filePath size
   where
     makeThumb :: Size -> RGB -> RGB
-    makeThumb (Size w h) = resize NearestNeighbor (ix2 w h)
+    makeThumb (Size w h) = resize NearestNeighbor (ix2 h w)
 
 imageSize :: FilePath -> IO Size
 imageSize fp = do
@@ -159,16 +159,15 @@ data Thumbnail = Thumbnail
     , thumbSize :: Size  -- ^ Actual size of the created thumbnail
     } deriving (Show, Eq)
 
-instance Default Configuration where
-    def = Configuration
-        { fileFormat          = JPG
-        , cropFirst           = Nothing
-        , preserveAspectRatio = True
-        , upScaleOriginal     = False
-        , namePrefix          = "thumbnail-"
-        , nonceSuffix         = False
-        , dstDirectory        = getTemporaryDirectory
-        }
+defaultConfig = Configuration
+    { fileFormat          = JPG
+    , cropFirst           = Nothing
+    , preserveAspectRatio = True
+    , upScaleOriginal     = False
+    , namePrefix          = "thumbnail-"
+    , nonceSuffix         = False
+    , dstDirectory        = getTemporaryDirectory
+    }
 
 data ThumbnailException
     = FailedToLoadImage
