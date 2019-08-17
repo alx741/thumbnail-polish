@@ -20,14 +20,16 @@ import           Data.ByteString            (hGetContents)
 import           Data.Char                  (toLower)
 import           Data.Default               (Default (..))
 import           Data.Maybe                 (catMaybes)
+import           Data.Text                  (unpack)
 import           System.Directory           (getTemporaryDirectory)
+import           System.FilePath.Posix      ((</>))
 import           System.IO                  (IOMode (..), hClose, hFileSize,
                                              openFile)
 import           Vision.Image               (InterpolMethod (NearestNeighbor),
                                              RGB, crop, resize, shape)
 import qualified Vision.Image.Storage.DevIL as Devil (Autodetect (..), BMP (..),
-                                                      GIF (..), JPG (..),
-                                                      PNG (..), load, save)
+                                                      JPG (..), PNG (..),
+                                                      SaveImageType, load, save)
 import qualified Vision.Primitive           as P (Rect (..), Size, ix2)
 import           Vision.Primitive.Shape     as PS
 
@@ -47,7 +49,8 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
     let sizes = bool reqSizes (fitAscpectRation imageSize reqSizes) preserveAspectRatio
     dstDir <- dstDirectory
     suffix <- bool (pure "") (('_' :) <$> nonce) nonceSuffix
-    thumbnails <- catMaybes <$> traverse (createThumbnail config suffix dstDir image) sizes
+    thumbnails <- catMaybes <$>
+        traverse (createThumbnail config suffix dstDir image imageSize) sizes
     pure thumbnails
   where
     cropImage :: Rect -> RGB -> RGB
@@ -57,24 +60,38 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
     fitAscpectRation = undefined
 
     nonce :: IO String
-    nonce = undefined --take 10 <$> Nonce.new >>= Nonce.nonce128urlT
+    nonce = take 10 . unpack <$> (Nonce.new >>= Nonce.nonce128urlT)
 
 
 
-createThumbnail :: Configuration -> String -> FilePath -> RGB -> Size -> IO (Maybe Thumbnail)
-createThumbnail Configuration{..} suffix dstDir img (Size w h) = do
+createThumbnail :: Configuration -> String -> FilePath -> RGB -> Size -> Size -> IO (Maybe Thumbnail)
+createThumbnail Configuration{..} suffix dstDir img imgSize size@(Size w h) = do
     let name = namePrefix
             <> show w <> "_" <> show h
             <> suffix
             <> "." <> (toLower <$> show fileFormat)
-    undefined
+
+    if size > imgSize && not upScaleOriginal
+    then pure Nothing
+    else Just <$> do
+        let thumbImg = makeThumb size img
+        let filePath = dstDir </> name
+
+        -- FIXME: Horrible hack! What to do!!??
+        case fileFormat of
+            BMP -> Devil.save Devil.BMP filePath thumbImg
+            JPG -> Devil.save Devil.JPG filePath thumbImg
+            PNG -> Devil.save Devil.PNG filePath thumbImg
+
+        pure $ Thumbnail filePath size
   where
     makeThumb :: Size -> RGB -> RGB
     makeThumb (Size w h) = resize NearestNeighbor (ix2 w h)
 
 imageSize :: FilePath -> IO Size
-imageSize fp = do -- size <$> undefined
-    img <- undefined
+imageSize fp = do
+    imgResult <- Devil.load Devil.Autodetect fp
+    img <- either (\_ -> throwIO FailedToLoadImage) pure imgResult
     pure $ size img
 
 size :: RGB -> Size
@@ -85,8 +102,7 @@ size img =
 
 data Configuration = Configuration
     { fileFormat          :: ImageFileFormat
-        -- ^ In which file format to encode the created thumbnails
-        -- Default: JPG
+        -- ^ In which file format to encode the created thumbnails. Default: JPG
     , cropFirst           :: Maybe Rect
         -- ^ Whether the input image should be cropped to 'Rect' before creating
         -- thumbnails or left intact. The first thumbnail in the list will be
@@ -115,7 +131,13 @@ data Configuration = Configuration
 data Size = Size
     { width  :: Int
     , height :: Int
-    } deriving (Show, Read, Eq, Ord)
+    } deriving (Show, Read, Eq)
+
+instance Ord Size where
+    compare s1@(Size w1 h1) s2@(Size w2 h2)
+        | s1 == s2 = EQ
+        | w1 > w2 || h1 > h2 = GT
+        | otherwise = LT
 
 data Rect = Rect
     { rX    :: Int  -- ^ X coordinate of the first pixel
@@ -125,7 +147,6 @@ data Rect = Rect
 
 data ImageFileFormat
     = BMP
-    | GIF
     | JPG
     | PNG
     deriving (Show, Read, Enum, Eq, Ord)
@@ -133,7 +154,6 @@ data ImageFileFormat
 data Thumbnail = Thumbnail
     { thumbFp          :: FilePath
     , thumbSize        :: Size  -- ^ Actual size of the created thumbnail
-    , thumbNonceSuffix :: Maybe String
     } deriving (Show, Eq)
 
 instance Default Configuration where
