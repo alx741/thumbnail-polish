@@ -46,7 +46,7 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
             imageResult
     let image = maybe originalImage (`cropImage` originalImage) cropFirst
     let imageSize = size image
-    let sizes = bool reqSizes (fitAscpectRation imageSize reqSizes) preserveAspectRatio
+    let sizes = bool reqSizes (fitAspectRatio imageSize <$> reqSizes) preserveAspectRatio
     dstDir <- dstDirectory
     suffix <- bool (pure "") (('_' :) <$> nonce) nonceSuffix
     thumbnails <- catMaybes <$>
@@ -56,8 +56,11 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
     cropImage :: Rect -> RGB -> RGB
     cropImage (Rect x y (Size w h)) = crop (P.Rect x y w h)
 
-    fitAscpectRation :: Size -> [Size] -> [Size]
-    fitAscpectRation = undefined
+    fitAspectRatio :: Size -> Size -> Size
+    fitAspectRatio (Size iW iH) (Size oW oH)
+        | iW > iH = Size oW $ round $ fromIntegral (oH * iH) / fromIntegral iW
+        | iH > iW = Size (round $ fromIntegral (oW * iW) / fromIntegral iH) oH
+        | otherwise = Size oW oH
 
     nonce :: IO String
     nonce = take 10 . unpack <$> (Nonce.new >>= Nonce.nonce128urlT)
@@ -152,8 +155,8 @@ data ImageFileFormat
     deriving (Show, Read, Enum, Eq, Ord)
 
 data Thumbnail = Thumbnail
-    { thumbFp          :: FilePath
-    , thumbSize        :: Size  -- ^ Actual size of the created thumbnail
+    { thumbFp   :: FilePath
+    , thumbSize :: Size  -- ^ Actual size of the created thumbnail
     } deriving (Show, Eq)
 
 instance Default Configuration where
