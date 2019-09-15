@@ -1,6 +1,7 @@
 # thumbnail-polish
 
-Haskell image thumbnail creation library.
+Haskell image thumbnail creation library with cropping, upscaling, aspect ratio
+preservation and nonce suffixing.
 
 ## Usage
 
