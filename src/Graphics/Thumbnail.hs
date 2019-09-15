@@ -10,7 +10,17 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Graphics.Thumbnail where
+module Graphics.Thumbnail
+    ( createThumbnails
+    , defaultConfig
+    , imageSize
+    , Thumbnail(..)
+    , Configuration(..)
+    , ImageFileFormat(..)
+    , Rect(..)
+    , Size(..)
+    , ThumbnailException(..)
+    ) where
 
 
 import           Control.Exception
@@ -80,7 +90,7 @@ createThumbnail Configuration{..} suffix dstDir img imgSize size@(Size w h) = do
         let thumbImg = makeThumb size img
         let filePath = dstDir </> name
 
-        -- FIXME: Horrible hack! What to do!!??
+        -- FIXME: Horrible hack, what to do?
         case fileFormat of
             BMP -> Devil.save Devil.BMP filePath thumbImg
             JPG -> Devil.save Devil.JPG filePath thumbImg
@@ -156,7 +166,9 @@ data ImageFileFormat
 
 data Thumbnail = Thumbnail
     { thumbFp   :: FilePath
-    , thumbSize :: Size  -- ^ Actual size of the created thumbnail
+    , thumbSize :: Size
+        -- ^ Actual size of the created thumbnail. Might differ from the
+        -- requested size if the `preserveAspectRatio` option is used
     } deriving (Show, Eq)
 
 defaultConfig = Configuration
