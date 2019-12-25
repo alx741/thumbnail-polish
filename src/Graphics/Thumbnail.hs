@@ -59,8 +59,9 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
     let sizes = bool reqSizes (fitAspectRatio imageSize <$> reqSizes) preserveAspectRatio
     dstDir <- dstDirectory
     suffix <- bool (pure "") (('_' :) <$> nonce) nonceSuffix
-    thumbnails <- catMaybes <$>
-        traverse (createThumbnail config suffix dstDir image imageSize) sizes
+    thumbnails <- catMaybes <$> traverse
+        (createThumbnail config suffix dstDir image imageSize)
+        (maybe sizes (\rect -> rSize rect : sizes) cropFirst)
     pure thumbnails
   where
     cropImage :: Rect -> RGB -> RGB
