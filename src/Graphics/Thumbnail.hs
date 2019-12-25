@@ -58,9 +58,9 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
     let imageSize = size image
     let sizes = bool reqSizes (fitAspectRatio imageSize <$> reqSizes) preserveAspectRatio
     dstDir <- dstDirectory
-    suffix <- bool (pure "") (('_' :) <$> nonce) nonceSuffix
+    nonce  <- bool (pure Nothing) (Just <$> generateNonce) nonceSuffix
     thumbnails <- catMaybes <$> traverse
-        (createThumbnail config suffix dstDir image imageSize)
+        (createThumbnail config nonce dstDir image imageSize)
         (maybe sizes (\rect -> rSize rect : sizes) cropFirst)
     pure thumbnails
   where
@@ -73,13 +73,14 @@ createThumbnails config@Configuration{..} reqSizes inputFp = do
         | iH > iW = Size (round $ fromIntegral (oW * iW) / fromIntegral iH) oH
         | otherwise = Size oW oH
 
-    nonce :: IO String
-    nonce = take 10 . unpack <$> (Nonce.new >>= Nonce.nonce128urlT)
+    generateNonce :: IO String
+    generateNonce = take 10 . unpack <$> (Nonce.new >>= Nonce.nonce128urlT)
 
 
 
-createThumbnail :: Configuration -> String -> FilePath -> RGB -> Size -> Size -> IO (Maybe Thumbnail)
-createThumbnail Configuration{..} suffix dstDir img imgSize size@(Size w h) = do
+createThumbnail :: Configuration -> Maybe String -> FilePath -> RGB -> Size -> Size -> IO (Maybe Thumbnail)
+createThumbnail Configuration{..} mNonce dstDir img imgSize size@(Size w h) = do
+    let suffix = maybe "" (\nonce -> '_' : nonce) mNonce
     let name = namePrefix
             <> show w <> "_" <> show h
             <> suffix
@@ -97,7 +98,7 @@ createThumbnail Configuration{..} suffix dstDir img imgSize size@(Size w h) = do
             JPG -> Devil.save Devil.JPG filePath thumbImg
             PNG -> Devil.save Devil.PNG filePath thumbImg
 
-        pure $ Thumbnail filePath size
+        pure $ Thumbnail filePath mNonce size
   where
     makeThumb :: Size -> RGB -> RGB
     makeThumb (Size w h) = resize NearestNeighbor (ix2 h w)
@@ -166,8 +167,9 @@ data ImageFileFormat
     deriving (Show, Read, Enum, Eq, Ord)
 
 data Thumbnail = Thumbnail
-    { thumbFp   :: FilePath
-    , thumbSize :: Size
+    { thumbFp    :: FilePath
+    , thumbNonce :: Maybe String -- ^ Filename nonce suffix
+    , thumbSize  :: Size
         -- ^ Actual size of the created thumbnail. Might differ from the
         -- requested size if the `preserveAspectRatio` option is used
     } deriving (Show, Eq)
